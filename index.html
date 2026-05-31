@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TrendPulse — 社交媒体热点监测</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js">
+</script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: #0f1117; color: #e1e4ea; min-height: 100vh; }
+.app { display: flex; }
+
+/* Sidebar */
+.sidebar { width: 220px; min-height: 100vh; background: #161822; padding: 24px 0; display: flex; flex-direction: column; position: fixed; top: 0; bottom: 0; z-index: 10; }
+.logo { padding: 0 20px 28px; font-size: 20px; font-weight: 700; letter-spacing: -0.5px; color: #fff; }
+.logo span { color: #7C8CF8; }
+.nav-item { padding: 10px 20px; margin: 2px 10px; border-radius: 8px; font-size: 14px; color: #8a8f9e; cursor: pointer; transition: all 0.15s; }
+.nav-item:hover { color: #c5c9d4; background: rgba(255,255,255,0.04); }
+.nav-item.active { color: #fff; background: rgba(124,140,248,0.12); font-weight: 600; }
+.nav-section { padding: 16px 20px 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #555; }
+
+/* Main */
+.main { margin-left: 220px; flex: 1; padding: 24px 32px; }
+
+/* Header */
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+.header h1 { font-size: 22px; font-weight: 600; }
+.platform-tabs { display: flex; gap: 4px; background: #161822; border-radius: 10px; padding: 4px; }
+.platform-tab { padding: 7px 18px; border-radius: 8px; font-size: 13px; cursor: pointer; color: #8a8f9e; transition: all 0.15s; border: none; background: none; font-family: inherit; }
+.platform-tab.active { background: #7C8CF8; color: #fff; }
+.platform-tab:hover:not(.active) { color: #c5c9d4; }
+.live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #4ade80; margin-right: 6px; animation: pulse 2s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* Panels */
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* Search bar */
+.search-bar { display: flex; gap: 10px; margin-bottom: 24px; }
+.search-input { flex: 1; padding: 12px 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); background: #161822; color: #e1e4ea; font-size: 15px; font-family: inherit; outline: none; transition: border-color 0.15s; }
+.search-input:focus { border-color: rgba(124,140,248,0.5); }
+.search-input::placeholder { color: #555; }
+.btn { padding: 12px 24px; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; font-family: inherit; transition: all 0.15s; white-space: nowrap; }
+.btn-primary { background: #7C8CF8; color: #fff; }
+.btn-primary:hover { background: #6b7de8; }
+.btn-outline { background: rgba(124,140,248,0.1); color: #a5b0e8; border: 1px solid rgba(124,140,248,0.2); }
+.btn-outline:hover { background: rgba(124,140,248,0.18); }
+.btn-ghost { background: none; color: #8a8f9e; padding: 6px 12px; font-size: 12px; }
+.btn-ghost:hover { color: #c5c9d4; }
+
+/* Weekly status bar */
+.weekly-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: rgba(124,140,248,0.06); border-radius: 10px; margin-bottom: 20px; font-size: 13px; color: #8a8f9e; }
+.weekly-bar strong { color: #c5c9d4; }
+
+/* Discover grid */
+.discover-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 24px; }
+.discover-card { background: #161822; border-radius: 14px; padding: 18px 20px; border: 1px solid rgba(255,255,255,0.04); cursor: pointer; transition: all 0.15s; }
+.discover-card:hover { border-color: rgba(124,140,248,0.25); transform: translateY(-1px); }
+.discover-card-name { font-size: 16px; font-weight: 600; margin-bottom: 8px; color: #fff; }
+.discover-card-snippet { font-size: 12px; color: #6b7080; line-height: 1.5; margin-bottom: 12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.discover-card-footer { display: flex; align-items: center; justify-content: space-between; }
+.platform-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+.platform-badge.xhs { background: rgba(255,36,66,0.15); color: #ff2442; }
+.platform-badge.douyin { background: rgba(0,0,0,0.3); color: #aaa; border: 1px solid #333; }
+.platform-badge.weibo { background: rgba(255,130,0,0.15); color: #ff8200; }
+.platform-badge.zhihu { background: rgba(0,102,255,0.15); color: #3b82f6; }
+.platform-badge.bilibili { background: rgba(251,114,153,0.15); color: #fb7299; }
+.platform-badge.unknown { background: rgba(255,255,255,0.06); color: #6b7080; }
+.mention-count { font-size: 11px; color: #555; }
+
+/* Empty state */
+.empty-state { text-align: center; padding: 60px 20px; color: #555; }
+.empty-state-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.3; }
+.empty-state-text { font-size: 15px; margin-bottom: 8px; }
+.empty-state-hint { font-size: 13px; color: #3a3d48; }
+
+/* Cards grid */
+.cards-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.card { background: #161822; border-radius: 14px; padding: 20px 22px; border: 1px solid rgba(255,255,255,0.04); }
+.card-label { font-size: 12px; color: #6b7080; margin-bottom: 6px; }
+.card-value { font-size: 30px; font-weight: 700; color: #fff; }
+.card-change { font-size: 12px; margin-top: 4px; }
+.card-change.up { color: #4ade80; }
+.card-change.down { color: #f87171; }
+
+/* Charts row */
+.charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 24px; }
+.chart-card { background: #161822; border-radius: 14px; padding: 20px 22px; border: 1px solid rgba(255,255,255,0.04); }
+.chart-title { font-size: 14px; font-weight: 600; margin-bottom: 16px; color: #c5c9d4; }
+.chart-wrap { position: relative; width: 100%; }
+.chart-wrap canvas { width: 100% !important; }
+
+/* Table */
+.table-card { background: #161822; border-radius: 14px; padding: 20px 22px; border: 1px solid rgba(255,255,255,0.04); margin-bottom: 24px; }
+.table-wrap { overflow-x: auto; max-height: 500px; overflow-y: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 10px 12px; color: #6b7080; font-weight: 500; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 12px; position: sticky; top: 0; background: #161822; }
+td { padding: 11px 12px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+tr:hover td { background: rgba(255,255,255,0.015); }
+.tag { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; }
+.tag-hot { background: rgba(248,113,113,0.15); color: #f87171; }
+.tag-rising { background: rgba(251,191,36,0.15); color: #fbbf24; }
+.tag-stable { background: rgba(74,222,128,0.12); color: #4ade80; }
+
+/* Keywords cloud */
+.keyword-cloud-card { background: #161822; border-radius: 14px; padding: 20px 22px; border: 1px solid rgba(255,255,255,0.04); margin-bottom: 24px; }
+.keyword-cloud { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center; padding: 10px 0; }
+.keyword { display: inline-block; padding: 6px 14px; border-radius: 20px; background: rgba(124,140,248,0.08); color: #a5b0e8; cursor: pointer; transition: all 0.15s; border: 1px solid transparent; }
+.keyword:hover { border-color: rgba(124,140,248,0.3); color: #c5c8f8; }
+.keyword.xl { font-size: 22px; padding: 10px 20px; background: rgba(124,140,248,0.16); color: #cbd2ff; font-weight: 600; }
+.keyword.lg { font-size: 18px; padding: 8px 16px; background: rgba(124,140,248,0.12); color: #bcc3f4; font-weight: 500; }
+.keyword.md { font-size: 15px; }
+.keyword.sm { font-size: 13px; padding: 5px 12px; }
+
+/* Topic detail card */
+.topic-detail-card { background: #161822; border-radius: 14px; padding: 24px; border: 1px solid rgba(255,255,255,0.04); margin-bottom: 16px; cursor: pointer; transition: all 0.15s; }
+.topic-detail-card:hover { border-color: rgba(124,140,248,0.2); }
+.topic-detail-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.topic-detail-title { font-size: 16px; font-weight: 600; }
+.topic-detail-stats { display: flex; gap: 24px; font-size: 13px; color: #8a8f9e; }
+.topic-detail-stats span { color: #c5c9d4; font-weight: 600; }
+
+/* Export area */
+.export-card { background: #161822; border-radius: 14px; padding: 24px; border: 1px solid rgba(255,255,255,0.04); margin-bottom: 16px; text-align: center; }
+.export-btn { display: inline-block; padding: 12px 32px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; border: none; font-family: inherit; margin: 8px; transition: all 0.15s; }
+.export-btn.json { background: rgba(124,140,248,0.15); color: #a5b0e8; }
+.export-btn.csv { background: rgba(74,222,128,0.12); color: #4ade80; }
+.export-btn:hover { filter: brightness(1.3); }
+.export-preview { margin-top: 16px; background: #0f1117; border-radius: 10px; padding: 16px; font-family: "Cascadia Code", "Fira Code", monospace; font-size: 12px; color: #8a8f9e; max-height: 300px; overflow: auto; text-align: left; white-space: pre-wrap; }
+
+/* Comparison chart area */
+.comparison-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+
+/* Keyword manage row */
+.keyword-add-row { display: flex; gap: 10px; margin-bottom: 20px; }
+.keyword-add-row input { flex: 1; padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); background: #161822; color: #e1e4ea; font-size: 14px; font-family: inherit; outline: none; }
+.keyword-add-row input:focus { border-color: rgba(124,140,248,0.5); }
+.btn-sm { padding: 8px 16px; font-size: 13px; }
+.btn-danger { background: rgba(248,113,113,0.12); color: #f87171; }
+.btn-danger:hover { background: rgba(248,113,113,0.22); }
+
+/* Select dropdown */
+.kw-select { padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08); background: #161822; color: #e1e4ea; font-size: 13px; font-family: inherit; outline: none; margin-right: 10px; }
+.kw-select:focus { border-color: rgba(124,140,248,0.5); }
+
+/* Detail view back */
+.detail-view { display: none; }
+.detail-view.active { display: block; }
+.list-view.active { display: block; }
+.list-view { display: none; }
+.btn-back { background: none; border: none; color: #7C8CF8; font-size: 13px; cursor: pointer; font-family: inherit; margin-bottom: 16px; display: inline-block; }
+.btn-back:hover { color: #a5b0e8; }
+
+.footer-note { text-align: center; font-size: 11px; color: #3a3d48; padding: 10px 0 30px; }
+
+/* Topic detail */
+.topic-preview-card { background: #161822; border-radius: 14px; padding: 24px; border: 1px solid rgba(255,255,255,0.04); margin-bottom: 16px; }
+.topic-preview-title { font-size: 18px; font-weight: 600; margin-bottom: 10px; }
+.topic-preview-meta { display: flex; gap: 16px; margin-bottom: 14px; font-size: 13px; color: #8a8f9e; }
+.topic-preview-snippet { font-size: 13px; color: #8a8f9e; line-height: 1.7; }
+.topic-preview-link { font-size: 12px; color: #7C8CF8; word-break: break-all; }
+
+/* Loading spinner */
+.loading { text-align: center; padding: 24px; color: #555; font-size: 13px; }
+
+@media (max-width: 1100px) {
+  .cards-grid, .discover-grid { grid-template-columns: repeat(2, 1fr); }
+  .charts-row, .comparison-row { grid-template-columns: 1fr; }
+  .sidebar { width: 60px; }
+  .sidebar .logo, .sidebar .nav-item, .sidebar .nav-section { display: none; }
+  .main { margin-left: 60px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="logo">Trend<span>Pulse</span></div>
+    <div class="nav-section">发现</div>
+    <div class="nav-item active" onclick="switchPanel('discover', this)">趋势发现</div>
+    <div class="nav-section">监测</div>
+    <div class="nav-item" onclick="switchPanel('dashboard', this)">数据概览</div>
+    <div class="nav-item" onclick="switchPanel('topics', this)">话题详情</div>
+    <div class="nav-item" onclick="switchPanel('keywords', this)">关键词管理</div>
+    <div class="nav-section">数据</div>
+    <div class="nav-item" onclick="switchPanel('history', this)">历史趋势</div>
+    <div class="nav-item" onclick="switchPanel('export', this)">导出报告</div>
+  </aside>
+
+  <main class="main">
+    <div class="header">
+      <h1><span class="live-dot"></span><span id="pageTitle">趋势发现</span></h1>
+      <div class="platform-tabs" id="platformTabs">
+        <button class="platform-tab active" onclick="switchPlatform('', this)">全部</button>
+        <button class="platform-tab" onclick="switchPlatform('xhs', this)">小红书</button>
+        <button class="platform-tab" onclick="switchPlatform('douyin', this)">抖音</button>
+        <button class="platform-tab" onclick="switchPlatform('weibo', this)">微博</button>
+        <button class="platform-tab" onclick="switchPlatform('zhihu', this)">知乎</button>
+        <button class="platform-tab" onclick="switchPlatform('bilibili', this)">B站</button>
+      </div>
+    </div>
+
+    <!-- ═══ Panel: Discover (default landing) ═══ -->
+    <div class="panel active" id="panel-discover">
+      <div class="search-bar">
+        <input type="text" class="search-input" id="searchInput" placeholder="搜索任意关键词，发现热门话题..." onkeydown="if(event.key==='Enter')searchKeyword()">
+        <button class="btn btn-primary" onclick="searchKeyword()">搜索</button>
+        <button class="btn btn-outline" id="btnWeeklyCrawl" onclick="triggerWeeklyCrawl()">发现本周热点</button>
+      </div>
+      <div class="weekly-bar">
+        <span>本周：<strong id="currentWeek">—</strong> · 已发现 <strong id="weeklyDiscCount">—</strong> 个话题</span>
+        <button class="btn btn-ghost" onclick="refreshDiscoveries()">刷新</button>
+      </div>
+      <div id="discoverListView">
+        <div class="discover-grid" id="discoverGrid"></div>
+        <div class="empty-state" id="discoverEmpty" style="display:none">
+          <div class="empty-state-icon">🔍</div>
+          <div class="empty-state-text">还没有发现数据</div>
+          <div class="empty-state-hint">点击上方「发现本周热点」开始探索当前热门话题</div>
+        </div>
+      </div>
+      <div id="discoverDetailView" style="display:none">
+        <button class="btn-back" onclick="closeDiscoverDetail()">← 返回热点列表</button>
+        <div id="discoverDetailContent"></div>
+      </div>
+    </div>
+
+    <!-- ═══ Panel: Dashboard ═══ -->
+    <div class="panel" id="panel-dashboard">
+      <div class="cards-grid">
+        <div class="card"><div class="card-label">发现话题总数</div><div class="card-value" id="totalTopics">—</div><div class="card-change up">累计入库</div></div>
+        <div class="card"><div class="card-label">本周新增热点</div><div class="card-value" id="adhdTopics">—</div><div class="card-change up">↑ 持续增长</div></div>
+        <div class="card"><div class="card-label">追踪关键词</div><div class="card-value" id="avgHeat">—</div><div class="card-change up">动态管理</div></div>
+        <div class="card"><div class="card-label">累计爬取次数</div><div class="card-value" id="newCreators">—</div><div class="card-change up">Bing + Baidu</div></div>
+      </div>
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-title">话题搜索趋势 <select class="kw-select" id="trendKwSelect" onchange="loadTrendChart()"></select></div>
+          <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+        </div>
+        <div class="chart-card"><div class="chart-title">话题类型分布</div><div class="chart-wrap"><canvas id="sentimentChart"></canvas></div></div>
+      </div>
+      <div class="keyword-cloud-card"><div class="chart-title">高频追踪词</div><div class="keyword-cloud" id="keywordCloud"></div></div>
+      <div class="table-card"><div class="chart-title">近期高热度内容</div><div class="table-wrap"><table><thead><tr><th>内容</th><th>来源</th><th>互动</th><th>热度</th><th>标签</th></tr></thead><tbody id="postsTable"></tbody></table></div></div>
+    </div>
+
+    <!-- ═══ Panel: Topics ═══ -->
+    <div class="panel" id="panel-topics">
+      <div class="list-view active" id="topicListView">
+        <div class="search-bar">
+          <input type="text" class="search-input" id="topicSearchInput" placeholder="输入关键词筛选话题..." onkeydown="if(event.key==='Enter')loadTopicList()">
+          <button class="btn btn-outline btn-sm" onclick="loadTopicList()">筛选</button>
+        </div>
+        <div id="topicDetailList"></div>
+      </div>
+      <div class="detail-view" id="topicDetailView">
+        <button class="btn-back" onclick="closeTopicDetail()">← 返回话题列表</button>
+        <div id="topicDetailContent"></div>
+      </div>
+    </div>
+
+    <!-- ═══ Panel: Keywords ═══ -->
+    <div class="panel" id="panel-keywords">
+      <div class="keyword-add-row">
+        <input type="text" id="newKeywordInput" placeholder="输入新关键词，如「春季穿搭」「AI 教程」..." onkeydown="if(event.key==='Enter')addKeyword()">
+        <button class="btn btn-primary btn-sm" onclick="addKeyword()">添加关键词</button>
+      </div>
+      <div class="table-card"><div class="chart-title">已追踪关键词</div><div class="table-wrap" style="max-height:300px"><table><thead><tr><th>关键词</th><th>分类</th><th>添加时间</th><th>状态</th><th>操作</th></tr></thead><tbody id="kwManageBody"></tbody></table></div></div>
+      <div class="comparison-row">
+        <div class="chart-card"><div class="chart-title">关键词搜索量对比（近 7 天）</div><div class="chart-wrap"><canvas id="kwCompareChart"></canvas></div></div>
+        <div class="chart-card"><div class="chart-title">关键词趋势 <select class="kw-select" id="kwTrendSelect" onchange="loadKwTrendChart()"></select></div><div class="chart-wrap"><canvas id="kwTrendChart"></canvas></div></div>
+      </div>
+      <div class="table-card"><div class="chart-title">关键词数据详情</div><div class="table-wrap"><table><thead><tr><th>关键词</th><th>近7天搜索量</th><th>内容数</th><th>均热度</th><th>趋势</th></tr></thead><tbody id="kwTableBody"></tbody></table></div></div>
+    </div>
+
+    <!-- ═══ Panel: History ═══ -->
+    <div class="panel" id="panel-history">
+      <div class="chart-card" style="margin-bottom:24px">
+        <div class="chart-title">历史趋势 <select class="kw-select" id="historyKwSelect" onchange="loadFullHistory()"></select></div>
+        <div class="chart-wrap"><canvas id="fullHistoryChart"></canvas></div>
+      </div>
+      <div class="table-card"><div class="chart-title">按日明细</div><div class="table-wrap" style="max-height:400px"><table><thead><tr><th>日期</th><th>总搜索量</th><th>总内容数</th><th>均热度</th></tr></thead><tbody id="historyTableBody"></tbody></table></div></div>
+    </div>
+
+    <!-- ═══ Panel: Export ═══ -->
+    <div class="panel" id="panel-export">
+      <div class="export-card">
+        <div class="chart-title" style="margin-bottom:16px">导出数据</div>
+        <button class="export-btn json" onclick="doExport('json')">导出 JSON（话题数据）</button>
+        <button class="export-btn csv" onclick="doExport('csv')">导出 CSV（话题数据）</button>
+        <button class="export-btn json" style="background:rgba(251,191,36,0.12);color:#fbbf24" onclick="doExportDiscoveries()">导出 JSON（热点发现）</button>
+        <div class="export-preview" id="exportPreview">点击按钮预览导出内容...</div>
+      </div>
+    </div>
+
+    <div class="footer-note">数据更新于 <span id="lastUpdate">—</span> · 覆盖主流平台公开热点内容</div>
+  </main>
+</div>
+
+<script>
+var API = '';
+var currentPlatform = '';
+var currentPanel = 'discover';
+var state = { keywords: [], discoveries: [] };
+
+// Chart instances
+var trendChart = null, sentimentChart = null, kwCompareChart = null, kwTrendChart = null, fullHistoryChart = null;
+
+// ── Init ──
+loadDiscoveries();
+loadKeywordCache();
+
+// ── Panel switching ──
+function switchPanel(panel, btn) {
+  currentPanel = panel;
+  document.querySelectorAll('.nav-item').forEach(function(t){ t.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
+  var el = document.getElementById('panel-' + panel);
+  if (el) el.classList.add('active');
+
+  var titles = { discover: '趋势发现', dashboard: '数据概览', topics: '话题详情', keywords: '关键词管理', history: '历史趋势', export: '导出报告' };
+  document.getElementById('pageTitle').textContent = titles[panel] || panel;
+
+  if (panel === 'discover') { closeDiscoverDetail(); refreshDiscoveries(); }
+  if (panel === 'dashboard') refreshDashboard();
+  if (panel === 'topics') loadTopicList();
+  if (panel === 'keywords') { loadKeywordManage(); loadKeywordAnalysis(); }
+  if (panel === 'history') loadFullHistory();
+  if (panel === 'export') previewExport();
+}
+
+function switchPlatform(platform, btn) {
+  currentPlatform = platform;
+  document.querySelectorAll('.platform-tab').forEach(function(t){ t.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  if (currentPanel === 'discover') renderDiscoverGrid();
+  if (currentPanel === 'dashboard') { loadPosts(); }
+  if (currentPanel === 'topics') loadTopicList();
+}
+
+// ── Discover Panel ──
+function loadDiscoveries() {
+  fetch(API + '/api/discover/weekly')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      state.discoveries = d.items || [];
+      document.getElementById('currentWeek').textContent = d.week || '—';
+      document.getElementById('weeklyDiscCount').textContent = d.totalCount || 0;
+      renderDiscoverGrid();
+    }).catch(function(){});
+}
+
+function refreshDiscoveries() {
+  loadDiscoveries();
+}
+
+function renderDiscoverGrid() {
+  var grid = document.getElementById('discoverGrid');
+  var empty = document.getElementById('discoverEmpty');
+  var items = state.discoveries;
+
+  if (currentPlatform) {
+    items = items.filter(function(d) { return d.platform === currentPlatform; });
+  }
+
+  if (items.length === 0) {
+    grid.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  var html = '';
+  items.forEach(function(d, idx) {
+    var platClass = d.platform || 'unknown';
+    var platName = { xhs: '小红书', douyin: '抖音', weibo: '微博', zhihu: '知乎', bilibili: 'B站' }[d.platform] || '其他';
+    var shortName = d.topic_name.length > 20 ? d.topic_name.substring(0, 20) + '...' : d.topic_name;
+    html += '<div class="discover-card" onclick="showDiscoverDetail(' + idx + ')">'
+      + '<div class="discover-card-name">' + shortName + '</div>'
+      + '<div class="discover-card-snippet">' + (d.snippet || '').substring(0, 100) + '</div>'
+      + '<div class="discover-card-footer">'
+      + '<span class="platform-badge ' + platClass + '">' + platName + '</span>'
+      + '<span class="mention-count">' + (d.mention_count || 1) + ' 热度</span>'
+      + '</div></div>';
+  });
+  grid.innerHTML = html;
+}
+
+function showDiscoverDetail(idx) {
+  var d = state.discoveries[idx];
+  if (!d) return;
+  document.getElementById('discoverListView').style.display = 'none';
+  document.getElementById('discoverDetailView').style.display = 'block';
+
+  var platClass = d.platform || 'unknown';
+  var platName = { xhs: '小红书', douyin: '抖音', weibo: '微博', zhihu: '知乎', bilibili: 'B站' }[d.platform] || '其他';
+  var sourceUrl = d.source_url || ('https://www.bing.com/search?q=' + encodeURIComponent(d.topic_name));
+
+  var html = '<div class="topic-preview-card">'
+    + '<div class="topic-preview-title">' + d.topic_name + '</div>'
+    + '<div class="topic-preview-meta">'
+    + '<span class="platform-badge ' + platClass + '">' + platName + '</span>'
+    + '<span>来源数: ' + (d.mention_count || 1) + '</span>'
+    + '</div>'
+    + '<div class="topic-preview-snippet">' + (d.snippet || '暂无描述') + '</div>'
+    + '<div style="margin-top:16px;display:flex;gap:10px">'
+    + '<a class="btn btn-primary btn-sm" href="' + sourceUrl + '" target="_blank" style="text-decoration:none">打开来源</a>'
+    + '<button class="btn btn-outline btn-sm" onclick="event.stopPropagation();trackTopicFromDetail(\'' + d.topic_name.replace(/'/g, "\\'") + '\')">追踪此话题</button>'
+    + '</div>'
+    + '</div>';
+
+  document.getElementById('discoverDetailContent').innerHTML = html;
+}
+
+function closeDiscoverDetail() {
+  document.getElementById('discoverDetailView').style.display = 'none';
+  document.getElementById('discoverListView').style.display = 'block';
+}
+
+function trackTopicFromDetail(topicName) {
+  fetch(API + '/api/keywords', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keyword: topicName, category: 'discovered' })
+  }).then(function() {
+    loadKeywordCache();
+    // Also trigger a crawl
+    return fetch(API + '/api/crawl', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keywords: [topicName], count: 10 })
+    });
+  }).then(function() {
+    alert('已添加「' + topicName + '」到追踪列表并开始爬取！');
+  }).catch(function() {});
+}
+
+function searchKeyword() {
+  var kw = document.getElementById('searchInput').value.trim();
+  if (!kw) return;
+  // Add keyword and trigger crawl
+  fetch(API + '/api/keywords', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keyword: kw })
+  }).then(function(r) { return r.json(); })
+  .then(function() {
+    document.getElementById('searchInput').value = '';
+    loadKeywordCache();
+    // Trigger a crawl for this keyword
+    return fetch(API + '/api/crawl', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keywords: [kw], count: 10, crawlType: 'keyword' })
+    });
+  }).then(function() {
+    alert('已添加关键词「' + kw + '」并开始爬取！稍后可在「话题详情」和「数据概览」中查看结果。');
+  }).catch(function(e) {
+    alert('添加失败: ' + e.message);
+  });
+}
+
+function triggerWeeklyCrawl() {
+  var btn = document.getElementById('btnWeeklyCrawl');
+  btn.textContent = '正在发现...';
+  btn.disabled = true;
+  fetch(API + '/api/discover/crawl', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+    .then(function(r) { return r.json(); })
+    .then(function() {
+      btn.textContent = '发现中，请稍后刷新...';
+      setTimeout(function() {
+        btn.textContent = '发现本周热点';
+        btn.disabled = false;
+        loadDiscoveries();
+      }, 15000);
+    }).catch(function() {
+      btn.textContent = '发现本周热点';
+      btn.disabled = false;
+    });
+}
+
+function trackDiscoveredTopic(topicName) {
+  fetch(API + '/api/keywords', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keyword: topicName, category: 'discovered' })
+  }).then(function() {
+    loadKeywordCache();
+    return fetch(API + '/api/crawl', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keywords: [topicName], count: 10 })
+    });
+  }).catch(function(){});
+}
+
+// ── Dashboard Panel ──
+function refreshDashboard() {
+  loadStats();
+  loadKeywordSelects();
+  loadTrendChart();
+  loadSentiment();
+  loadKeywords();
+  loadPosts();
+}
+
+function loadStats() {
+  fetch(API + '/api/stats')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      document.getElementById('totalTopics').textContent = (d.totalTopics || 0).toLocaleString();
+      document.getElementById('adhdTopics').textContent = (d.weeklyDiscoveries || d.recentTopics || 0).toLocaleString();
+      document.getElementById('avgHeat').textContent = (d.trendKeywords || 0);
+      document.getElementById('newCreators').textContent = (d.totalCrawls || 0);
+      document.getElementById('lastUpdate').textContent = d.lastCrawl ? d.lastCrawl.crawled_at : '—';
+    }).catch(function(){});
+}
+
+function loadKeywordCache() {
+  fetch(API + '/api/keywords/manage')
+    .then(function(r) { return r.json(); })
+    .then(function(kws) { state.keywords = kws || []; })
+    .catch(function(){});
+}
+
+function loadKeywordSelects() {
+  var selects = ['trendKwSelect', 'kwTrendSelect', 'historyKwSelect'];
+  selects.forEach(function(id) {
+    var sel = document.getElementById(id);
+    if (!sel) return;
+    var currentVal = sel.value;
+    sel.innerHTML = '<option value="">综合</option>';
+    state.keywords.forEach(function(k) {
+      sel.innerHTML += '<option value="' + k.keyword + '">' + k.keyword + '</option>';
+    });
+    if (currentVal) sel.value = currentVal;
+  });
+}
+
+function loadTrendChart() {
+  var kw = document.getElementById('trendKwSelect').value || (state.keywords.length > 0 ? state.keywords[0].keyword : 'ADHD');
+  fetch(API + '/api/trends?keyword=' + encodeURIComponent(kw) + '&days=60')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.labels.length === 0) return;
+      var ctx = document.getElementById('trendChart').getContext('2d');
+      var gradient = ctx.createLinearGradient(0, 0, 0, 280);
+      gradient.addColorStop(0, 'rgba(124,140,248,0.3)');
+      gradient.addColorStop(1, 'rgba(124,140,248,0.02)');
+      if (trendChart) trendChart.destroy();
+      trendChart = new Chart(ctx, {
+        type: 'line', data: { labels: d.labels, datasets: [
+          { label: kw + ' 搜索量', data: d.searches, borderColor: '#7C8CF8', backgroundColor: gradient, fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2.5 },
+          { label: '内容数', data: d.posts, borderColor: '#f87171', backgroundColor: 'transparent', fill: false, tension: 0.4, pointRadius: 0, borderWidth: 2, borderDash: [5,3] }
+        ]},
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { labels: { color: '#8a8f9e', usePointStyle: true, pointStyle: 'circle', padding: 20, font: { size: 12 } } } },
+          scales: { x: { ticks: { color: '#555', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.03)' } }, y: { ticks: { color: '#555', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.04)' }, beginAtZero: false } },
+          interaction: { intersect: false, mode: 'index' }
+        }
+      });
+    }).catch(function(){});
+}
+
+function loadSentiment() {
+  fetch(API + '/api/sentiment')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var labels = Object.keys(d);
+      var values = labels.map(function(k) { return d[k]; });
+      var colors = ['#f87171','#7C8CF8','#fbbf24','#4ade80','#555'];
+      var ctx = document.getElementById('sentimentChart').getContext('2d');
+      if (sentimentChart) sentimentChart.destroy();
+      sentimentChart = new Chart(ctx, {
+        type: 'doughnut', data: { labels: labels, datasets: [{ data: values, backgroundColor: colors, borderColor: '#161822', borderWidth: 3 }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#8a8f9e', padding: 14, usePointStyle: true, pointStyle: 'circle', font: { size: 11 } } } }, cutout: '60%' }
+      });
+    }).catch(function(){});
+}
+
+function loadKeywords() {
+  fetch(API + '/api/keywords')
+    .then(function(r) { return r.json(); })
+    .then(function(keywords) {
+      if (keywords.length === 0) return;
+      var cloud = document.getElementById('keywordCloud');
+      cloud.innerHTML = '';
+      var maxCount = keywords[0].total_searches || 1;
+      keywords.forEach(function(k) {
+        var ratio = k.total_searches / maxCount;
+        var cls = ratio > 0.7 ? 'xl' : ratio > 0.4 ? 'lg' : ratio > 0.2 ? 'md' : 'sm';
+        var span = document.createElement('span');
+        span.className = 'keyword ' + cls;
+        span.textContent = k.keyword;
+        span.onclick = function(){ switchPanel('keywords', document.querySelectorAll('.nav-item')[3]); loadKeywordAnalysis(k.keyword); };
+        cloud.appendChild(span);
+      });
+    }).catch(function(){});
+}
+
+function loadPosts() {
+  var url = API + '/api/topics/hot?limit=20';
+  if (currentPlatform) url += '&platform=' + encodeURIComponent(currentPlatform);
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(topics) {
+      if (topics.length === 0) return;
+      var html = '';
+      topics.forEach(function(t) {
+        var tagClass = t.heat_score >= 80 ? 'tag-hot' : t.heat_score >= 60 ? 'tag-rising' : 'tag-stable';
+        var tagText = t.heat_score >= 80 ? '火热' : t.heat_score >= 60 ? '上升中' : '稳定';
+        html += '<tr><td>' + (t.title || '').substring(0, 80) + '</td><td style="color:#8a8f9e">' + (t.source || '') + '</td><td>' + (t.likes || '-') + '</td><td style="font-weight:600">' + (t.heat_score || 50) + '</td><td><span class="tag ' + tagClass + '">' + tagText + '</span></td></tr>';
+      });
+      document.getElementById('postsTable').innerHTML = html;
+    }).catch(function(){});
+}
+
+// ── Topics Panel ──
+function loadTopicList(kw) {
+  var url = API + '/api/topics?limit=50';
+  if (kw) url += '&keyword=' + encodeURIComponent(kw);
+  if (currentPlatform) url += '&platform=' + encodeURIComponent(currentPlatform);
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(topics) {
+      if (topics.length === 0) {
+        document.getElementById('topicDetailList').innerHTML = '<div class="empty-state"><div class="empty-state-text">暂无匹配话题</div></div>';
+        return;
+      }
+      var html = '';
+      topics.forEach(function(t) {
+        html += '<div class="topic-detail-card" onclick="openTopicDetail(' + t.id + ')">'
+          + '<div class="topic-detail-header"><span class="topic-detail-title">' + (t.title || '').substring(0, 60) + '</span><span class="platform-badge ' + (t.platform || 'unknown') + '">' + (t.platform || '其他') + '</span></div>'
+          + '<div class="topic-detail-stats"><div>来源 <span>' + (t.source || '') + '</span></div><div>热度 <span>' + (t.heat_score || 50) + '</span></div><div>关键词 <span>' + (t.keyword || '') + '</span></div></div>'
+          + '</div>';
+      });
+      document.getElementById('topicDetailList').innerHTML = html;
+    }).catch(function(){});
+}
+
+function openTopicDetail(id) {
+  fetch(API + '/api/topics/' + id)
+    .then(function(r) { return r.json(); })
+    .then(function(t) {
+      document.getElementById('topicListView').classList.remove('active');
+      document.getElementById('topicDetailView').classList.add('active');
+      var platClass = t.platform || 'unknown';
+      var platName = { xhs: '小红书', douyin: '抖音', weibo: '微博', zhihu: '知乎', bilibili: 'B站' }[t.platform] || '其他';
+      document.getElementById('topicDetailContent').innerHTML =
+        '<div class="topic-preview-card">'
+        + '<div class="topic-preview-title">' + (t.title || '') + '</div>'
+        + '<div class="topic-preview-meta"><span class="platform-badge ' + platClass + '">' + platName + '</span><span>热度：' + (t.heat_score || 50) + '</span><span>来源：' + (t.source || '') + '</span><span>关键词：' + (t.keyword || '') + '</span></div>'
+        + '<div class="topic-preview-snippet">' + (t.snippet || '暂无描述') + '</div>'
+        + (t.url ? '<div style="margin-top:12px"><a class="topic-preview-link" href="' + t.url + '" target="_blank">' + t.url + '</a></div>' : '')
+        + '</div>';
+    }).catch(function(){});
+}
+
+function closeTopicDetail() {
+  document.getElementById('topicDetailView').classList.remove('active');
+  document.getElementById('topicListView').classList.add('active');
+}
+
+// ── Keywords Panel ──
+function loadKeywordManage() {
+  fetch(API + '/api/keywords/manage')
+    .then(function(r) { return r.json(); })
+    .then(function(kws) {
+      state.keywords = kws || [];
+      loadKeywordSelects();
+      var html = '';
+      kws.forEach(function(k) {
+        var statusBadge = k.active ? '<span class="tag tag-stable">活跃</span>' : '<span class="tag tag-hot">已停用</span>';
+        html += '<tr><td style="font-weight:600">' + k.keyword + '</td><td>' + (k.category || 'user') + '</td><td>' + (k.added_at || '') + '</td><td>' + statusBadge + '</td>'
+          + '<td><button class="btn btn-danger btn-sm" onclick="removeKeyword(\'' + k.keyword.replace(/'/g, "\\'") + '\')">删除</button></td></tr>';
+      });
+      document.getElementById('kwManageBody').innerHTML = html;
+    }).catch(function(){});
+}
+
+function addKeyword() {
+  var input = document.getElementById('newKeywordInput');
+  var kw = input.value.trim();
+  if (!kw) return;
+  fetch(API + '/api/keywords', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ keyword: kw })
+  }).then(function(r) { return r.json(); })
+  .then(function() {
+    input.value = '';
+    loadKeywordManage();
+    loadKeywordAnalysis();
+    loadKeywordCache();
+  }).catch(function(e) { alert('添加失败: ' + e.message); });
+}
+
+function removeKeyword(kw) {
+  if (!confirm('确定要删除关键词「' + kw + '」吗？')) return;
+  fetch(API + '/api/keywords/' + encodeURIComponent(kw), { method: 'DELETE' })
+    .then(function(r) { return r.json(); })
+    .then(function() {
+      loadKeywordManage();
+      loadKeywordAnalysis();
+      loadKeywordCache();
+    }).catch(function(e) { alert('删除失败: ' + e.message); });
+}
+
+function loadKeywordAnalysis(kw) {
+  fetch(API + '/api/keywords')
+    .then(function(r) { return r.json(); })
+    .then(function(keywords) {
+      if (keywords.length === 0) return;
+      var top8 = keywords.slice(0, 8);
+      var ctx1 = document.getElementById('kwCompareChart').getContext('2d');
+      if (kwCompareChart) kwCompareChart.destroy();
+      kwCompareChart = new Chart(ctx1, {
+        type: 'bar', data: { labels: top8.map(function(k){ return k.keyword; }), datasets: [
+          { label: '搜索量', data: top8.map(function(k){ return k.total_searches; }), backgroundColor: 'rgba(124,140,248,0.5)', borderRadius: 6 },
+          { label: '内容数', data: top8.map(function(k){ return k.total_posts; }), backgroundColor: 'rgba(248,113,113,0.5)', borderRadius: 6 }
+        ]},
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#8a8f9e', font: { size: 11 } } } }, scales: { x: { ticks: { color: '#555', maxRotation: 45, font: { size: 10 } }, grid: { display: false } }, y: { ticks: { color: '#555' }, grid: { color: 'rgba(255,255,255,0.04)' } } } }
+      });
+
+      var keyword = kw || (top8.length > 0 ? top8[0].keyword : 'ADHD 拖延');
+      var sel = document.getElementById('kwTrendSelect');
+      if (sel) sel.value = keyword;
+      loadKwTrendChart();
+
+      var html = '';
+      keywords.forEach(function(k) {
+        var trendIcon = k.total_searches > 200 ? '↑' : k.total_searches > 100 ? '→' : '↓';
+        html += '<tr><td style="font-weight:600">' + k.keyword + '</td><td>' + k.total_searches.toLocaleString() + '</td><td>' + k.total_posts + '</td><td>' + k.avg_heat + '</td><td>' + trendIcon + '</td></tr>';
+      });
+      document.getElementById('kwTableBody').innerHTML = html;
+    }).catch(function(){});
+}
+
+function loadKwTrendChart() {
+  var kw = document.getElementById('kwTrendSelect').value || (state.keywords.length > 0 ? state.keywords[0].keyword : 'ADHD 拖延');
+  fetch(API + '/api/trends?keyword=' + encodeURIComponent(kw) + '&days=60')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d || d.labels.length === 0) return;
+      var ctx2 = document.getElementById('kwTrendChart').getContext('2d');
+      if (kwTrendChart) kwTrendChart.destroy();
+      kwTrendChart = new Chart(ctx2, {
+        type: 'line', data: { labels: d.labels, datasets: [
+          { label: '搜索量', data: d.searches, borderColor: '#7C8CF8', tension: 0.4, pointRadius: 0, borderWidth: 2 },
+          { label: '内容数', data: d.posts, borderColor: '#fbbf24', tension: 0.4, pointRadius: 0, borderWidth: 2 }
+        ]},
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#8a8f9e', font: { size: 11 } } } }, scales: { x: { ticks: { color: '#555', font: { size: 10 } } }, y: { ticks: { color: '#555' }, grid: { color: 'rgba(255,255,255,0.04)' } } } }
+      });
+    }).catch(function(){});
+}
+
+// ── History Panel ──
+function loadFullHistory() {
+  var kw = document.getElementById('historyKwSelect').value || (state.keywords.length > 0 ? state.keywords[0].keyword : 'ADHD');
+  fetch(API + '/api/trends?keyword=' + encodeURIComponent(kw) + '&days=60')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.labels.length === 0) return;
+      var ctx = document.getElementById('fullHistoryChart').getContext('2d');
+      var gradient = ctx.createLinearGradient(0, 0, 0, 280);
+      gradient.addColorStop(0, 'rgba(124,140,248,0.3)');
+      gradient.addColorStop(1, 'rgba(124,140,248,0.02)');
+      if (fullHistoryChart) fullHistoryChart.destroy();
+      fullHistoryChart = new Chart(ctx, {
+        type: 'line', data: { labels: d.labels, datasets: [
+          { label: '总搜索量', data: d.searches, borderColor: '#7C8CF8', backgroundColor: gradient, fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2.5 },
+          { label: '总内容数', data: d.posts, borderColor: '#f87171', tension: 0.4, pointRadius: 0, borderWidth: 2 }
+        ]},
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#8a8f9e', font: { size: 12 } } } }, scales: { x: { ticks: { color: '#555', maxTicksLimit: 20 } }, y: { ticks: { color: '#555' }, grid: { color: 'rgba(255,255,255,0.04)' } } } }
+      });
+
+      var html = '';
+      d.labels.forEach(function(label, i) {
+        html += '<tr><td>' + label + '</td><td>' + d.searches[i] + '</td><td>' + d.posts[i] + '</td><td>' + Math.round((d.searches[i] + d.posts[i]) / 4) + '</td></tr>';
+      });
+      document.getElementById('historyTableBody').innerHTML = html;
+    }).catch(function(){});
+}
+
+// ── Export Panel ──
+function previewExport() {
+  fetch(API + '/api/stats')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      document.getElementById('exportPreview').textContent = JSON.stringify(d, null, 2);
+    }).catch(function(){});
+}
+
+function doExport(format) {
+  var url = API + '/api/topics?limit=200';
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (format === 'json') {
+        var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        downloadBlob(blob, 'trendpulse-topics.json');
+        document.getElementById('exportPreview').textContent = '已导出 ' + data.length + ' 条记录 (JSON)';
+      } else {
+        var csv = '﻿title,snippet,url,source,platform,heat_score,keyword\n';
+        data.forEach(function(r) {
+          csv += '"' + (r.title||'').replace(/"/g,'""') + '","' + (r.snippet||'').replace(/"/g,'""') + '","' + (r.url||'') + '","' + r.source + '","' + r.platform + '",' + r.heat_score + ',"' + r.keyword + '"\n';
+        });
+        var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+        downloadBlob(blob, 'trendpulse-topics.csv');
+        document.getElementById('exportPreview').textContent = '已导出 ' + data.length + ' 条记录 (CSV)';
+      }
+    }).catch(function(){});
+}
+
+function doExportDiscoveries() {
+  fetch(API + '/api/discover/weekly')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      downloadBlob(blob, 'trendpulse-discoveries.json');
+      document.getElementById('exportPreview').textContent = '已导出 ' + (data.totalCount || 0) + ' 条热点发现 (JSON)';
+    }).catch(function(){});
+}
+
+function downloadBlob(blob, filename) {
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── Live counter ──
+setInterval(function() { if (currentPanel === 'dashboard') loadStats(); }, 30000);
+</script>
+</body>
+</html>

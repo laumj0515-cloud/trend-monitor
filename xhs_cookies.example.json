@@ -1,0 +1,9 @@
+[
+  { "name": "web_session", "value": "YOUR_WEB_SESSION_TOKEN", "domain": ".xiaohongshu.com" },
+  { "name": "webId", "value": "YOUR_WEB_ID", "domain": ".xiaohongshu.com" },
+  { "name": "id_token", "value": "YOUR_ID_TOKEN", "domain": ".xiaohongshu.com" },
+  { "name": "gid", "value": "YOUR_GID", "domain": ".xiaohongshu.com" },
+  { "name": "customerClientId", "value": "YOUR_CLIENT_ID", "domain": ".xiaohongshu.com" },
+  { "name": "xsecappid", "value": "xhs-pc-web", "domain": ".xiaohongshu.com" },
+  { "name": "galaxy_creator_session_id", "value": "YOUR_SESSION_ID", "domain": ".xiaohongshu.com" }
+]

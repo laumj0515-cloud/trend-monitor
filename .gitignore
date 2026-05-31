@@ -1,0 +1,7 @@
+node_modules/
+data/
+xhs_debug.png
+xhs_cookies.json
+test_puppeteer.js
+.claude/
+*.log
