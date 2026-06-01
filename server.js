@@ -279,6 +279,32 @@ app.get('/api/topics/:id', function(req, res) {
   }
 });
 
+// ── Startup: catch up if today's crawl was missed ──
+(async function() {
+  var today = new Date().toISOString().split('T')[0];
+  var hasToday = db.db.prepare('SELECT COUNT(*) as c FROM daily_stats WHERE date = ?').get(today);
+  var hasWeekly = db.db.prepare('SELECT COUNT(*) as c FROM discoveries WHERE crawl_week = ?').get(db.getCurrentWeek());
+
+  if (!hasToday || hasToday.c === 0) {
+    console.log('[Startup] No data for today yet, running catch-up crawl...');
+    try {
+      var keywords = db.getUserKeywords(true).map(function(k) { return k.keyword; });
+      if (keywords.length > 0) {
+        await crawler.crawlAll({ keywords: keywords, count: 8 });
+        console.log('[Startup] Catch-up crawl done');
+      }
+    } catch(e) { console.error('[Startup] Catch-up error:', e.message); }
+  }
+
+  if (!hasWeekly || hasWeekly.c === 0) {
+    console.log('[Startup] No weekly discovery yet, running catch-up...');
+    try {
+      await crawler.discoverTrendingTopics();
+      console.log('[Startup] Weekly discovery done');
+    } catch(e) { console.error('[Startup] Weekly error:', e.message); }
+  }
+})();
+
 // ── Scheduler: daily crawl + weekly discovery ──
 cron.schedule('13 9 * * *', async function() {
   console.log('[Scheduler] Daily keyword crawl...');
