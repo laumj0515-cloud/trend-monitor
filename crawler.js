@@ -234,12 +234,16 @@ async function crawlBilibiliKeyword(keyword) {
     var data = resp.data;
     if (!data || !data.data || !data.data.result) return results;
 
+    var today = new Date().toISOString().split('T')[0];
+    var totalLikes = 0;
+
     // Find the video results category
     data.data.result.forEach(function(cat) {
       if (cat.data && Array.isArray(cat.data) && cat.data.length > 0 && cat.data[0].bvid) {
         cat.data.forEach(function(v) {
           var cleanTitle = v.title.replace(/<[^>]+>/g, '');
           var cleanDesc = (v.description || '').replace(/<[^>]+>/g, '');
+          totalLikes += (v.like || 0);
           results.push({
             keyword: keyword,
             title: cleanTitle.substring(0, 200),
@@ -256,9 +260,20 @@ async function crawlBilibiliKeyword(keyword) {
     });
 
     if (results.length > 0) {
+      // Store individual videos for content discovery
       var inserted = db.insertTopics(results);
       db.logCrawl({ source: 'bilibili', keyword: keyword, results_count: results.length, status: 'ok', error: '', crawl_type: 'keyword' });
-      console.log('  Bilibili: "' + keyword + '" → ' + results.length + ' videos, ' + inserted + ' new');
+      console.log('  Bilibili: "' + keyword + '" → ' + results.length + ' videos, ' + totalLikes.toLocaleString() + ' total likes, ' + inserted + ' new');
+
+      // Also write daily snapshot directly (bypasses dedup - records today's total engagement)
+      db.insertDailyStat({
+        date: today,
+        keyword: keyword,
+        source: 'bilibili',
+        search_count: totalLikes,
+        post_count: results.length,
+        avg_heat: results.length > 0 ? Math.round(totalLikes / results.length) : 0
+      });
     }
   } catch(e) {
     db.logCrawl({ source: 'bilibili', keyword: keyword, results_count: 0, status: 'error', error: e.message, crawl_type: 'keyword' });
@@ -266,12 +281,38 @@ async function crawlBilibiliKeyword(keyword) {
   return results;
 }
 
+// ── Bilibili benchmark: top ranking avg views ──
+async function fetchBilibiliBenchmark() {
+  try {
+    var resp = await client.get('https://api.bilibili.com/x/web-interface/ranking/v2?rid=0&type=all', {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 'Referer': 'https://www.bilibili.com' }
+    });
+    var list = (resp.data && resp.data.data && resp.data.data.list) ? resp.data.data.list : [];
+    if (list.length === 0) return null;
+
+    var totalViews = 0, totalLikes = 0;
+    list.forEach(function(v) {
+      totalViews += (v.stat ? v.stat.view : 0);
+      totalLikes += (v.stat ? v.stat.like : 0);
+    });
+    return {
+      video_count: list.length,
+      avg_views: Math.round(totalViews / list.length),
+      avg_likes: Math.round(totalLikes / list.length),
+      total_views: totalViews
+    };
+  } catch(e) {
+    console.error('Bilibili benchmark error:', e.message);
+    return null;
+  }
+}
+
 // ── Daily stats aggregation ──
-function aggregateDailyStats() {
+async function aggregateDailyStats() {
   var today = new Date().toISOString().split('T')[0];
   var stats = [];
   var keywords = getActiveKeywords();
-  var sources = ['bing', 'baidu', 'news', 'bilibili'];
+  var sources = ['bing', 'baidu', 'news'];  // bilibili written directly by crawlBilibiliKeyword
 
   keywords.forEach(function(kw) {
     sources.forEach(function(src) {
@@ -280,38 +321,36 @@ function aggregateDailyStats() {
       ).get('%' + kw + '%', src, today + ' 00:00:00').c;
 
       var avgHeat = 0;
-      var totalLikes = 0;
-
       if (count > 0) {
         var row = db.db.prepare(
-          "SELECT AVG(heat_score) as a, SUM(likes) as total_likes FROM topics WHERE keyword LIKE ? AND source = ? AND crawled_at >= ?"
+          "SELECT AVG(heat_score) as a FROM topics WHERE keyword LIKE ? AND source = ? AND crawled_at >= ?"
         ).get('%' + kw + '%', src, today + ' 00:00:00');
         avgHeat = row ? Math.round(row.a) || 0 : 0;
-        totalLikes = row ? row.total_likes || 0 : 0;
       }
 
-      if (src === 'bilibili') {
-        // For bilibili: search_count = total likes (real engagement), post_count = video count
-        stats.push({
-          date: today,
-          keyword: kw,
-          source: src,
-          search_count: totalLikes,
-          post_count: count,
-          avg_heat: avgHeat
-        });
-      } else {
-        stats.push({
-          date: today,
-          keyword: kw,
-          source: src,
-          search_count: count,
-          post_count: count,
-          avg_heat: avgHeat
-        });
-      }
+      stats.push({
+        date: today,
+        keyword: kw,
+        source: src,
+        search_count: count,
+        post_count: count,
+        avg_heat: avgHeat
+      });
     });
   });
+
+  // Add Bilibili benchmark
+  var bench = await fetchBilibiliBenchmark();
+  if (bench) {
+    stats.push({
+      date: today,
+      keyword: '__平台基准__',
+      source: 'bilibili_benchmark',
+      search_count: bench.avg_views,
+      post_count: bench.video_count,
+      avg_heat: Math.round(bench.avg_views / 50000)
+    });
+  }
 
   db.insertDailyStats(stats);
   console.log('Daily stats aggregated: ' + stats.length + ' records');
@@ -355,7 +394,7 @@ async function crawlAll(options) {
   }
 
   // Aggregate today's stats
-  aggregateDailyStats();
+  await aggregateDailyStats();
 
   console.log('');
   console.log('=== Crawl Complete: ' + totalResults + ' total results ===');
