@@ -221,12 +221,57 @@ function calcHeat(title, snippet) {
   return Math.min(score, 100);
 }
 
+// ── Bilibili keyword search: volume + engagement per keyword ──
+async function crawlBilibiliKeyword(keyword) {
+  var results = [];
+  try {
+    var resp = await client.get('https://api.bilibili.com/x/web-interface/search/all/v2?keyword=' + encodeURIComponent(keyword) + '&page=1', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Referer': 'https://www.bilibili.com'
+      }
+    });
+    var data = resp.data;
+    if (!data || !data.data || !data.data.result) return results;
+
+    // Find the video results category
+    data.data.result.forEach(function(cat) {
+      if (cat.data && Array.isArray(cat.data) && cat.data.length > 0 && cat.data[0].bvid) {
+        cat.data.forEach(function(v) {
+          var cleanTitle = v.title.replace(/<[^>]+>/g, '');
+          var cleanDesc = (v.description || '').replace(/<[^>]+>/g, '');
+          results.push({
+            keyword: keyword,
+            title: cleanTitle.substring(0, 200),
+            snippet: cleanDesc.substring(0, 300),
+            url: 'https://www.bilibili.com/video/' + v.bvid,
+            source: 'bilibili',
+            platform: 'bilibili',
+            likes: v.like || 0,
+            heat_score: Math.min(100, Math.round((v.play || 0) / 50000)),
+            published_at: new Date(v.pubdate * 1000).toISOString().split('T')[0]
+          });
+        });
+      }
+    });
+
+    if (results.length > 0) {
+      var inserted = db.insertTopics(results);
+      db.logCrawl({ source: 'bilibili', keyword: keyword, results_count: results.length, status: 'ok', error: '', crawl_type: 'keyword' });
+      console.log('  Bilibili: "' + keyword + '" → ' + results.length + ' videos, ' + inserted + ' new');
+    }
+  } catch(e) {
+    db.logCrawl({ source: 'bilibili', keyword: keyword, results_count: 0, status: 'error', error: e.message, crawl_type: 'keyword' });
+  }
+  return results;
+}
+
 // ── Daily stats aggregation ──
 function aggregateDailyStats() {
   var today = new Date().toISOString().split('T')[0];
   var stats = [];
   var keywords = getActiveKeywords();
-  var sources = ['bing', 'baidu', 'news'];
+  var sources = ['bing', 'baidu', 'news', 'bilibili'];
 
   keywords.forEach(function(kw) {
     sources.forEach(function(src) {
@@ -235,21 +280,36 @@ function aggregateDailyStats() {
       ).get('%' + kw + '%', src, today + ' 00:00:00').c;
 
       var avgHeat = 0;
+      var totalLikes = 0;
+
       if (count > 0) {
         var row = db.db.prepare(
-          "SELECT AVG(heat_score) as a FROM topics WHERE keyword LIKE ? AND source = ? AND crawled_at >= ?"
+          "SELECT AVG(heat_score) as a, SUM(likes) as total_likes FROM topics WHERE keyword LIKE ? AND source = ? AND crawled_at >= ?"
         ).get('%' + kw + '%', src, today + ' 00:00:00');
         avgHeat = row ? Math.round(row.a) || 0 : 0;
+        totalLikes = row ? row.total_likes || 0 : 0;
       }
 
-      stats.push({
-        date: today,
-        keyword: kw,
-        source: src,
-        search_count: count,  // real crawl count, no random
-        post_count: count,
-        avg_heat: avgHeat
-      });
+      if (src === 'bilibili') {
+        // For bilibili: search_count = total likes (real engagement), post_count = video count
+        stats.push({
+          date: today,
+          keyword: kw,
+          source: src,
+          search_count: totalLikes,
+          post_count: count,
+          avg_heat: avgHeat
+        });
+      } else {
+        stats.push({
+          date: today,
+          keyword: kw,
+          source: src,
+          search_count: count,
+          post_count: count,
+          avg_heat: avgHeat
+        });
+      }
     });
   });
 
@@ -289,6 +349,9 @@ async function crawlAll(options) {
 
     var newsResults = await crawlNewsFeed(kw);
     totalResults += newsResults.length;
+
+    var blResults = await crawlBilibiliKeyword(kw);
+    totalResults += blResults.length;
   }
 
   // Aggregate today's stats

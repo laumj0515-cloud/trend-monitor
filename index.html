@@ -536,7 +536,7 @@ function loadKeywordSelects() {
 
 function loadTrendChart() {
   var kw = document.getElementById('trendKwSelect').value || (state.keywords.length > 0 ? state.keywords[0].keyword : 'ADHD');
-  fetch(API + '/api/trends?keyword=' + encodeURIComponent(kw) + '&days=60')
+  fetch(API + '/api/trends?keyword=' + encodeURIComponent(kw) + '&days=60&source=bilibili')
     .then(function(r) { return r.json(); })
     .then(function(d) {
       if (d.labels.length === 0) return;
@@ -547,13 +547,13 @@ function loadTrendChart() {
       if (trendChart) trendChart.destroy();
       trendChart = new Chart(ctx, {
         type: 'line', data: { labels: d.labels, datasets: [
-          { label: kw + ' 搜索量', data: d.searches, borderColor: '#7C8CF8', backgroundColor: gradient, fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2.5 },
-          { label: '内容数', data: d.posts, borderColor: '#f87171', backgroundColor: 'transparent', fill: false, tension: 0.4, pointRadius: 0, borderWidth: 2, borderDash: [5,3] }
+          { label: kw + ' B站总点赞', data: d.searches, borderColor: '#7C8CF8', backgroundColor: gradient, fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2.5 },
+          { label: '视频数', data: d.posts, borderColor: '#f87171', backgroundColor: 'transparent', fill: false, tension: 0.4, pointRadius: 0, borderWidth: 2, borderDash: [5,3] }
         ]},
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: { legend: { labels: { color: '#8a8f9e', usePointStyle: true, pointStyle: 'circle', padding: 20, font: { size: 12 } } } },
-          scales: { x: { ticks: { color: '#555', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.03)' } }, y: { ticks: { color: '#555', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.04)' }, beginAtZero: false } },
+          scales: { x: { ticks: { color: '#555', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.03)' } }, y: { ticks: { color: '#555', font: { size: 11 }, callback: function(v) { return v >= 10000 ? (v/10000).toFixed(1) + '万' : v; } }, grid: { color: 'rgba(255,255,255,0.04)' }, beginAtZero: false } },
           interaction: { intersect: false, mode: 'index' }
         }
       });
@@ -735,7 +735,7 @@ function loadKeywordAnalysis(kw) {
 
 function loadKwTrendChart() {
   var kw = document.getElementById('kwTrendSelect').value || (state.keywords.length > 0 ? state.keywords[0].keyword : 'ADHD 拖延');
-  fetch(API + '/api/trends?keyword=' + encodeURIComponent(kw) + '&days=60')
+  fetch(API + '/api/trends?keyword=' + encodeURIComponent(kw) + '&days=60&source=bilibili')
     .then(function(r) { return r.json(); })
     .then(function(d) {
       if (!d || d.labels.length === 0) return;
@@ -743,7 +743,7 @@ function loadKwTrendChart() {
       if (kwTrendChart) kwTrendChart.destroy();
       kwTrendChart = new Chart(ctx2, {
         type: 'line', data: { labels: d.labels, datasets: [
-          { label: '搜索量', data: d.searches, borderColor: '#7C8CF8', tension: 0.4, pointRadius: 0, borderWidth: 2 },
+          { label: 'B站总点赞', data: d.searches, borderColor: '#7C8CF8', tension: 0.4, pointRadius: 0, borderWidth: 2 },
           { label: '内容数', data: d.posts, borderColor: '#fbbf24', tension: 0.4, pointRadius: 0, borderWidth: 2 }
         ]},
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#8a8f9e', font: { size: 11 } } } }, scales: { x: { ticks: { color: '#555', font: { size: 10 } } }, y: { ticks: { color: '#555' }, grid: { color: 'rgba(255,255,255,0.04)' } } } }
@@ -754,7 +754,7 @@ function loadKwTrendChart() {
 // ── History Panel ──
 function loadFullHistory() {
   var kw = document.getElementById('historyKwSelect').value || (state.keywords.length > 0 ? state.keywords[0].keyword : 'ADHD');
-  fetch(API + '/api/trends?keyword=' + encodeURIComponent(kw) + '&days=60')
+  fetch(API + '/api/trends?keyword=' + encodeURIComponent(kw) + '&days=60&source=bilibili')
     .then(function(r) { return r.json(); })
     .then(function(d) {
       if (d.labels.length === 0) return;
@@ -765,10 +765,10 @@ function loadFullHistory() {
       if (fullHistoryChart) fullHistoryChart.destroy();
       fullHistoryChart = new Chart(ctx, {
         type: 'line', data: { labels: d.labels, datasets: [
-          { label: '总搜索量', data: d.searches, borderColor: '#7C8CF8', backgroundColor: gradient, fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2.5 },
-          { label: '总内容数', data: d.posts, borderColor: '#f87171', tension: 0.4, pointRadius: 0, borderWidth: 2 }
+          { label: 'B站总点赞', data: d.searches, borderColor: '#7C8CF8', backgroundColor: gradient, fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2.5 },
+          { label: '视频数', data: d.posts, borderColor: '#f87171', tension: 0.4, pointRadius: 0, borderWidth: 2 }
         ]},
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#8a8f9e', font: { size: 12 } } } }, scales: { x: { ticks: { color: '#555', maxTicksLimit: 20 } }, y: { ticks: { color: '#555' }, grid: { color: 'rgba(255,255,255,0.04)' } } } }
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#8a8f9e', font: { size: 12 } } } }, scales: { x: { ticks: { color: '#555', maxTicksLimit: 20 } }, y: { ticks: { color: '#555' } }, grid: { color: 'rgba(255,255,255,0.04)' } } }
       });
 
       var html = '';

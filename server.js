@@ -83,7 +83,8 @@ app.get('/api/trends', function(req, res) {
     var defaultKw = kws.length > 0 ? kws[0].keyword : 'ADHD';
     var keyword = req.query.keyword || defaultKw;
     var days = parseInt(req.query.days) || 30;
-    var data = db.getKeywordTrend(keyword, days);
+    var source = req.query.source || '';  // 'bilibili' for engagement, '' for all
+    var data = db.getKeywordTrend(keyword, days, source);
 
     // Reformat for chart display
     var labels = [];
@@ -107,6 +108,7 @@ app.get('/api/trends', function(req, res) {
 
     res.json({
       keyword: keyword,
+      source: source,
       labels: labels,
       searches: searches,
       posts: posts
