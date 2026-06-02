@@ -763,29 +763,39 @@ function loadKwTrendChart() {
 
 // ── History Panel ──
 function loadFullHistory() {
-  var kw = document.getElementById('historyKwSelect').value || (state.keywords.length > 0 ? state.keywords[0].keyword : 'ADHD');
-  fetch(API + '/api/trends?keyword=' + encodeURIComponent(kw) + '&days=14&source=bilibili')
+  // Ensure keywords are loaded first
+  fetch(API + '/api/keywords/manage')
     .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (d.labels.length === 0) return;
-      var ctx = document.getElementById('fullHistoryChart').getContext('2d');
-      var gradient = ctx.createLinearGradient(0, 0, 0, 280);
-      gradient.addColorStop(0, 'rgba(124,140,248,0.3)');
-      gradient.addColorStop(1, 'rgba(124,140,248,0.02)');
-      if (fullHistoryChart) fullHistoryChart.destroy();
-      fullHistoryChart = new Chart(ctx, {
-        type: 'line', data: { labels: d.labels, datasets: [
-          { label: 'B站总点赞', data: d.searches, borderColor: '#7C8CF8', backgroundColor: gradient, fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2.5 },
-          { label: '视频数', data: d.posts, borderColor: '#f87171', tension: 0.4, pointRadius: 0, borderWidth: 2 }
-        ]},
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#8a8f9e', font: { size: 12 } } } }, scales: { x: { ticks: { color: '#555', maxTicksLimit: 20 } }, y: { ticks: { color: '#555' } }, grid: { color: 'rgba(255,255,255,0.04)' } } }
-      });
-
-      var html = '';
-      d.labels.forEach(function(label, i) {
-        html += '<tr><td>' + label + '</td><td>' + d.searches[i] + '</td><td>' + d.posts[i] + '</td><td>' + Math.round((d.searches[i] + d.posts[i]) / 4) + '</td></tr>';
-      });
-      document.getElementById('historyTableBody').innerHTML = html;
+    .then(function(kws) {
+      state.keywords = kws || [];
+      loadKeywordSelects();
+      var kw = document.getElementById('historyKwSelect').value || (state.keywords.length > 0 ? state.keywords[0].keyword : '');
+      if (!kw) { document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="4" style="color:#555;text-align:center;padding:40px">暂无追踪关键词，请先在首页搜索添加</td></tr>'; return; }
+      return fetch(API + '/api/trends?keyword=' + encodeURIComponent(kw) + '&days=14&source=bilibili')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (!d || d.labels.length === 0) {
+            document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="4" style="color:#555;text-align:center;padding:40px">暂无数据，请等待自动爬取积累</td></tr>';
+            return;
+          }
+          var ctx = document.getElementById('fullHistoryChart').getContext('2d');
+          var gradient = ctx.createLinearGradient(0, 0, 0, 280);
+          gradient.addColorStop(0, 'rgba(124,140,248,0.3)');
+          gradient.addColorStop(1, 'rgba(124,140,248,0.02)');
+          if (fullHistoryChart) fullHistoryChart.destroy();
+          fullHistoryChart = new Chart(ctx, {
+            type: 'line', data: { labels: d.labels, datasets: [
+              { label: 'B站总点赞', data: d.searches, borderColor: '#7C8CF8', backgroundColor: gradient, fill: true, tension: 0.4, pointRadius: 3, borderWidth: 2.5 },
+              { label: '视频数', data: d.posts, borderColor: '#f87171', tension: 0.4, pointRadius: 3, borderWidth: 2 }
+            ]},
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#8a8f9e', font: { size: 12 } } } }, scales: { x: { ticks: { color: '#555', maxTicksLimit: 20 } }, y: { ticks: { color: '#555' } }, grid: { color: 'rgba(255,255,255,0.04)' } } }
+          });
+          var html = '';
+          d.labels.forEach(function(label, i) {
+            html += '<tr><td>' + label + '</td><td>' + d.searches[i].toLocaleString() + '</td><td>' + d.posts[i] + '</td><td>' + Math.round((d.searches[i] + d.posts[i]) / 4).toLocaleString() + '</td></tr>';
+          });
+          document.getElementById('historyTableBody').innerHTML = html;
+        });
     }).catch(function(){});
 }
 
