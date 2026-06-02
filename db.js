@@ -146,7 +146,7 @@ function getHotTopics(limit) {
 // ── Daily stats ──
 function insertDailyStat(stat) {
   var stmt = db.prepare(`
-    INSERT OR REPLACE INTO daily_stats (date, keyword, search_count, post_count, avg_heat, source)
+    INSERT OR IGNORE INTO daily_stats (date, keyword, search_count, post_count, avg_heat, source)
     VALUES (@date, @keyword, @search_count, @post_count, @avg_heat, @source)
   `);
   return stmt.run(stat);
@@ -154,7 +154,7 @@ function insertDailyStat(stat) {
 
 function insertDailyStats(stats) {
   var stmt = db.prepare(`
-    INSERT OR REPLACE INTO daily_stats (date, keyword, search_count, post_count, avg_heat, source)
+    INSERT OR IGNORE INTO daily_stats (date, keyword, search_count, post_count, avg_heat, source)
     VALUES (@date, @keyword, @search_count, @post_count, @avg_heat, @source)
   `);
   var tx = db.transaction(function(items) {
