@@ -538,8 +538,8 @@ function loadTrendChart() {
   var kw = document.getElementById('trendKwSelect').value || (state.keywords.length > 0 ? state.keywords[0].keyword : 'ADHD');
   // Fetch both keyword data and benchmark
   Promise.all([
-    fetch(API + '/api/trends?keyword=' + encodeURIComponent(kw) + '&days=60&source=bilibili').then(function(r) { return r.json(); }),
-    fetch(API + '/api/trends?keyword=' + encodeURIComponent('__平台基准__') + '&days=60&source=bilibili_benchmark').then(function(r) { return r.json(); })
+    fetch(API + '/api/trends?keyword=' + encodeURIComponent(kw) + '&days=14&source=bilibili').then(function(r) { return r.json(); }),
+    fetch(API + '/api/trends?keyword=' + encodeURIComponent('__平台基准__') + '&days=14&source=bilibili_benchmark').then(function(r) { return r.json(); })
   ]).then(function(results) {
     var d = results[0];
     var bench = results[1];
@@ -745,7 +745,7 @@ function loadKeywordAnalysis(kw) {
 
 function loadKwTrendChart() {
   var kw = document.getElementById('kwTrendSelect').value || (state.keywords.length > 0 ? state.keywords[0].keyword : 'ADHD 拖延');
-  fetch(API + '/api/trends?keyword=' + encodeURIComponent(kw) + '&days=60&source=bilibili')
+  fetch(API + '/api/trends?keyword=' + encodeURIComponent(kw) + '&days=14&source=bilibili')
     .then(function(r) { return r.json(); })
     .then(function(d) {
       if (!d || d.labels.length === 0) return;
@@ -764,7 +764,7 @@ function loadKwTrendChart() {
 // ── History Panel ──
 function loadFullHistory() {
   var kw = document.getElementById('historyKwSelect').value || (state.keywords.length > 0 ? state.keywords[0].keyword : 'ADHD');
-  fetch(API + '/api/trends?keyword=' + encodeURIComponent(kw) + '&days=60&source=bilibili')
+  fetch(API + '/api/trends?keyword=' + encodeURIComponent(kw) + '&days=14&source=bilibili')
     .then(function(r) { return r.json(); })
     .then(function(d) {
       if (d.labels.length === 0) return;
