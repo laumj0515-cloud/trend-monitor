@@ -281,7 +281,7 @@ tr:hover td { background: rgba(255,255,255,0.015); }
     <!-- ═══ Panel: History ═══ -->
     <div class="panel" id="panel-history">
       <div class="chart-card" style="margin-bottom:24px">
-        <div class="chart-title">历史趋势 <select class="kw-select" id="historyKwSelect" onchange="loadFullHistory()"></select></div>
+        <div class="chart-title">历史趋势 <select class="kw-select" id="historyKwSelect" onchange="loadHistoryChart(this.value)"></select></div>
         <div class="chart-wrap"><canvas id="fullHistoryChart"></canvas></div>
       </div>
       <div class="table-card"><div class="chart-title">按日明细</div><div class="table-wrap" style="max-height:400px"><table><thead><tr><th>日期</th><th>总搜索量</th><th>总内容数</th><th>均热度</th></tr></thead><tbody id="historyTableBody"></tbody></table></div></div>
@@ -331,7 +331,7 @@ function switchPanel(panel, btn) {
   if (panel === 'dashboard') refreshDashboard();
   if (panel === 'topics') loadTopicList();
   if (panel === 'keywords') { loadKeywordManage(); loadKeywordAnalysis(); }
-  if (panel === 'history') { loadKeywordCache().then(function() { loadKeywordSelects(); loadFullHistory(); }); }
+  if (panel === 'history') loadFullHistory();
   if (panel === 'export') previewExport();
 }
 
@@ -779,14 +779,43 @@ function loadKwTrendChart() {
 
 // ── History Panel ──
 function loadFullHistory() {
-  var kw = document.getElementById('historyKwSelect').value || (state.keywords.length > 0 ? state.keywords[0].keyword : '');
-  if (!kw) { document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="4" style="color:#555;text-align:center;padding:40px">暂无追踪关键词，请先在首页搜索添加</td></tr>'; return; }
+  // Populate dropdown first, then load chart
+  fetch(API + '/api/keywords/manage')
+    .then(function(r) { return r.json(); })
+    .then(function(kws) {
+      state.keywords = kws || [];
+      var sel = document.getElementById('historyKwSelect');
+      var currentVal = sel.value;
+      sel.innerHTML = '';
+      (kws || []).forEach(function(k) {
+        sel.innerHTML += '<option value="' + k.keyword + '">' + k.keyword + '</option>';
+      });
+      if (currentVal && kws.some(function(k) { return k.keyword === currentVal; })) {
+        sel.value = currentVal;
+      } else if (kws.length > 0) {
+        sel.value = kws[0].keyword;
+      }
 
-  fetch(API + '/api/trends?keyword=' + encodeURIComponent(kw) + '&days=14&source=bilibili')
+      var kw = sel.value;
+      if (!kw) {
+        document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="4" style="color:#555;text-align:center;padding:40px">暂无追踪关键词，请先在首页搜索添加</td></tr>';
+        return;
+      }
+
+      loadHistoryChart(kw);
+    })
+    .catch(function(e) {
+      console.error('History error:', e);
+    });
+}
+
+function loadHistoryChart(kw) {
+  document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="4" style="color:#555;text-align:center;padding:40px">加载中...</td></tr>';
+  fetch(API + '/api/trends?keyword=' + encodeURIComponent(kw) + '&days=60&source=bilibili')
     .then(function(r) { return r.json(); })
     .then(function(d) {
-      if (!d || d.labels.length === 0) {
-        document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="4" style="color:#555;text-align:center;padding:40px">该关键词暂无B站互动数据。系统每天自动爬取，数据会持续积累。</td></tr>';
+      if (!d || !d.labels || d.labels.length === 0) {
+        document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="4" style="color:#555;text-align:center;padding:40px">该关键词暂无数据</td></tr>';
         return;
       }
       var ctx = document.getElementById('fullHistoryChart').getContext('2d');
@@ -794,22 +823,26 @@ function loadFullHistory() {
       gradient.addColorStop(0, 'rgba(124,140,248,0.3)');
       gradient.addColorStop(1, 'rgba(124,140,248,0.02)');
       if (fullHistoryChart) fullHistoryChart.destroy();
-      var allVals3 = d.searches.filter(function(v) { return v > 0; });
-      var yMax3 = allVals3.length > 0 ? Math.max.apply(null, allVals3) + 500000 : 1000000;
-      var yMin3 = allVals3.length > 0 ? Math.max(0, Math.min.apply(null, allVals3) - 300000) : 0;
+      var vals = d.searches.filter(function(v) { return v > 0; });
+      var yMax = vals.length > 0 ? Math.max.apply(null, vals) + 500000 : 1000000;
+      var yMin = vals.length > 0 ? Math.max(0, Math.min.apply(null, vals) - 300000) : 0;
       fullHistoryChart = new Chart(ctx, {
         type: 'line', data: { labels: d.labels, datasets: [
-          { label: 'B站总点赞', data: d.searches, borderColor: '#7C8CF8', backgroundColor: gradient, fill: true, tension: 0.4, pointRadius: 3, borderWidth: 2.5 },
-          { label: '视频数', data: d.posts, borderColor: '#f87171', tension: 0.4, pointRadius: 3, borderWidth: 2 }
+          { label: 'B站总点赞', data: d.searches, borderColor: '#7C8CF8', backgroundColor: gradient, fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2.5 },
+          { label: '视频数', data: d.posts, borderColor: '#f87171', tension: 0.4, pointRadius: 0, borderWidth: 2 }
         ]},
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#8a8f9e', font: { size: 12 } } } }, scales: { x: { ticks: { color: '#555', maxTicksLimit: 20 } }, y: { min: yMin3, max: yMax3, ticks: { color: '#555' } }, grid: { color: 'rgba(255,255,255,0.04)' } } }
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#8a8f9e', font: { size: 12 } } } }, scales: { x: { ticks: { color: '#555', maxTicksLimit: 20 } }, y: { min: yMin, max: yMax, ticks: { color: '#555' } }, grid: { color: 'rgba(255,255,255,0.04)' } } }
       });
       var html = '';
       d.labels.forEach(function(label, i) {
-        html += '<tr><td>' + label + '</td><td>' + d.searches[i].toLocaleString() + '</td><td>' + d.posts[i] + '</td><td>' + Math.round((d.searches[i] + d.posts[i]) / 4).toLocaleString() + '</td></tr>';
+        html += '<tr><td>' + label + '</td><td>' + (d.searches[i]||0).toLocaleString() + '</td><td>' + (d.posts[i]||0) + '</td><td>' + Math.round(((d.searches[i]||0) + (d.posts[i]||0)) / 4).toLocaleString() + '</td></tr>';
       });
       document.getElementById('historyTableBody').innerHTML = html;
-    }).catch(function(){});
+    })
+    .catch(function(e) {
+      console.error('History error:', e);
+      document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="4" style="color:#f87171;text-align:center;padding:40px">加载失败</td></tr>';
+    });
 }
 
 // ── Export Panel ──
