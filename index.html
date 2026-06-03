@@ -7,8 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>TrendPulse — 社交媒体热点监测</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js">
-</script>
+<script src="chart.umd.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: #0f1117; color: #e1e4ea; min-height: 100vh; }
@@ -802,10 +801,11 @@ function loadFullHistory() {
         return;
       }
 
+      document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="4" style="color:#7C8CF8;text-align:center;padding:40px">已加载 ' + (kws||[]).length + ' 个关键词，正在查询「' + kw + '」...</td></tr>';
       loadHistoryChart(kw);
     })
     .catch(function(e) {
-      console.error('History error:', e);
+      document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="4" style="color:#f87171;text-align:center;padding:40px">⚠ 加载失败：无法连接服务器。<br><small>请确认 localhost:3456 可访问，且 VPN 未拦截本地请求。</small></td></tr>';
     });
 }
 
@@ -831,7 +831,7 @@ function loadHistoryChart(kw) {
           { label: 'B站总点赞', data: d.searches, borderColor: '#7C8CF8', backgroundColor: gradient, fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2.5 },
           { label: '视频数', data: d.posts, borderColor: '#f87171', tension: 0.4, pointRadius: 0, borderWidth: 2 }
         ]},
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#8a8f9e', font: { size: 12 } } } }, scales: { x: { ticks: { color: '#555', maxTicksLimit: 20 } }, y: { min: yMin, max: yMax, ticks: { color: '#555' } }, grid: { color: 'rgba(255,255,255,0.04)' } } }
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#8a8f9e', font: { size: 12 } } } }, scales: { x: { ticks: { color: '#555', maxTicksLimit: 20 }, grid: { color: 'rgba(255,255,255,0.03)' } }, y: { min: yMin, max: yMax, ticks: { color: '#555' }, grid: { color: 'rgba(255,255,255,0.04)' } } } }
       });
       var html = '';
       d.labels.forEach(function(label, i) {
@@ -841,7 +841,7 @@ function loadHistoryChart(kw) {
     })
     .catch(function(e) {
       console.error('History error:', e);
-      document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="4" style="color:#f87171;text-align:center;padding:40px">加载失败</td></tr>';
+      document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="4" style="color:#f87171;text-align:center;padding:40px">图表渲染失败：' + e.message + '</td></tr>';
     });
 }
 

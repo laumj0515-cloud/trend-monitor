@@ -6,7 +6,11 @@ var endDate = new Date(today);
 var days = [];
 for (var d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) { days.push(new Date(d)); }
 
-// Get each keyword's latest real bilibili engagement as the reference point
+// Delete old modeled data
+var deleted = db.db.prepare("DELETE FROM daily_stats WHERE source='bilibili_modeled'").run();
+console.log('Cleared ' + deleted.changes + ' old modeled points');
+
+// Get each keyword's latest real bilibili engagement
 var keywords = db.getUserKeywords(true);
 var refData = {};
 keywords.forEach(function(k) {
@@ -20,21 +24,26 @@ keywords.forEach(function(k) {
   }
 });
 
-console.log('Reference data (latest real point):');
-Object.keys(refData).forEach(function(kw) {
-  console.log('  ' + kw.substring(0, 25) + ': ' + refData[kw].likes.toLocaleString() + ' likes on ' + refData[kw].date);
-});
-
-// Generate backfill: only fill dates that have NO real data
 var inserted = 0;
 var skipped = 0;
 
 keywords.forEach(function(k) {
   var kw = k.keyword;
   var ref = refData[kw];
-  var refDate = new Date(ref.date);
-  var peakLikes = ref.likes;
-  var peakVideos = ref.videos;
+  var currentLikes = ref.likes;
+  var currentVideos = ref.videos;
+
+  // Each keyword gets a random "history profile":
+  // - baseRatio: what % of current value was the historical baseline (0.5-1.2)
+  // - trend: slight upward (+0.3 to +0.5) or downward (-0.3 to -0.1)
+  var seed = kw.split('').reduce(function(a,c){return a + c.charCodeAt(0)}, 0);
+  var rng = function(offset) {
+    var x = Math.sin(seed + offset) * 10000;
+    return x - Math.floor(x);
+  };
+  var baseRatio = 0.5 + rng(0) * 0.7;   // 0.5 ~ 1.2  (baseline relative to current)
+  var trendSlope = -0.3 + rng(1) * 0.8;  // -0.3 ~ +0.5 (downward to upward trend)
+  var volatility = 0.05 + rng(2) * 0.15; // 5% ~ 20% noise
 
   days.forEach(function(date) {
     var dateStr = date.toISOString().split('T')[0];
@@ -45,23 +54,33 @@ keywords.forEach(function(k) {
     ).get(dateStr, kw);
     if (exists.c > 0) { skipped++; return; }
 
-    // Progress: 0 = April 1, 1 = reference date
-    var totalSpan = refDate - startDate;
-    var progress = totalSpan > 0 ? (date - startDate) / totalSpan : 1;
-    if (progress < 0) progress = 0;
-    if (progress > 1) progress = 1;
+    // Progress: 0 = April 1, 1 = today
+    var totalDays = days.length;
+    var dayIndex = Math.floor((date - startDate) / 86400000);
+    var progress = dayIndex / totalDays;
 
-    // S-curve: slow start, accelerate, plateau
-    var ratio = 1 / (1 + Math.exp(-8 * (progress - 0.55)));
-    var rMin = 1 / (1 + Math.exp(-8 * (0 - 0.55)));
-    var rMax = 1 / (1 + Math.exp(-8 * (1 - 0.55)));
-    ratio = (ratio - rMin) / (rMax - rMin);
+    // Mix: baseline (baseRatio) + trend component + day-of-week noise + random noise
+    var dayOfWeek = date.getDay(); // 0=Sun, 6=Sat
+    var weekendEffect = (dayOfWeek === 0 || dayOfWeek === 6) ? -0.10 : 0;
 
-    // Small proportional noise (±10%)
-    var noise = 0.90 + Math.random() * 0.20;
+    // Base value with trend
+    var baseValue = currentLikes * (baseRatio + (1 - baseRatio) * progress * trendSlope);
 
-    var dayLikes = Math.max(100, Math.round(peakLikes * 0.03 + peakLikes * 0.97 * ratio * noise));
-    var dayVideos = Math.max(1, Math.round(peakVideos * 0.05 + peakVideos * 0.95 * ratio * noise));
+    // Weekly cycle effect (sine wave with 7-day period)
+    var weeklyWave = Math.sin(dayIndex * 2 * Math.PI / 7 + seed) * currentLikes * volatility * 0.5;
+
+    // Random daily fluctuation
+    var dailyNoise = (rng(dayIndex + 10) - 0.5) * currentLikes * volatility * 2;
+
+    // Occasional mini-spikes (10% chance of a +15% spike)
+    var spike = rng(dayIndex + 100) > 0.90 ? currentLikes * volatility * 3 : 0;
+
+    var dayLikes = Math.round(baseValue + weeklyWave + dailyNoise + spike + (currentLikes * weekendEffect));
+    dayLikes = Math.max(currentLikes * 0.1, dayLikes); // floor at 10% of current
+    dayLikes = Math.min(currentLikes * 1.5, dayLikes); // cap at 150% of current
+
+    var dayVideos = Math.round(currentVideos * (0.6 + 0.4 * progress * trendSlope + (rng(dayIndex + 50) - 0.5) * 0.3));
+    dayVideos = Math.max(3, Math.min(currentVideos + 10, dayVideos));
 
     db.insertDailyStat({
       date: dateStr,
@@ -75,5 +94,4 @@ keywords.forEach(function(k) {
   });
 });
 
-console.log('\nDone: ' + inserted + ' modeled points, skipped ' + skipped + ' real points.');
-console.log('Modeled source = bilibili_modeled (distinct from real bilibili).');
+console.log('Done: ' + inserted + ' modeled points, skipped ' + skipped + ' real points');

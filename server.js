@@ -8,6 +8,7 @@ var app = express();
 var PORT = process.env.PORT || 3456;
 
 app.use(express.json());
+app.use(express.static(__dirname));
 
 // Serve static frontend
 app.use(express.static(path.join(__dirname)));
@@ -281,8 +282,8 @@ app.get('/api/topics/:id', function(req, res) {
   }
 });
 
-// ── Startup: catch up if today's crawl was missed ──
-(async function() {
+// ── Startup: delayed catch-up (let server start first, then crawl) ──
+setTimeout(async function() {
   var today = new Date().toISOString().split('T')[0];
   var hasToday = db.db.prepare('SELECT COUNT(*) as c FROM daily_stats WHERE date = ?').get(today);
   var hasWeekly = db.db.prepare('SELECT COUNT(*) as c FROM discoveries WHERE crawl_week = ?').get(db.getCurrentWeek());
@@ -305,7 +306,7 @@ app.get('/api/topics/:id', function(req, res) {
       console.log('[Startup] Weekly discovery done');
     } catch(e) { console.error('[Startup] Weekly error:', e.message); }
   }
-})();
+}, 3000);
 
 console.log('Scheduler: Windows Task Scheduler (daily 9:13 + weekly Sun 8:07)');
 
