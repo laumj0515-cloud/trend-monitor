@@ -1,5 +1,6 @@
 var crawler = require('./crawler');
 var db = require('./db');
+var notify = require('./notify');
 
 console.log('=== TrendPulse Daily Crawl ===');
 console.log(new Date().toISOString());
@@ -14,5 +15,6 @@ crawler.crawlAll({ keywords: keywords, count: 8 })
   })
   .catch(function(e) {
     console.error('Error: ' + e.message);
+    notify.crawlFailed(e.message);
     process.exit(1);
   });

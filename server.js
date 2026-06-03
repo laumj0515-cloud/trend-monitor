@@ -144,6 +144,27 @@ app.post('/api/crawl', async function(req, res) {
   }
 });
 
+// ── API: Today's crawl health check ──
+app.get('/api/crawl/today-status', function(req, res) {
+  try {
+    var today = new Date().toISOString().split('T')[0];
+    var hasData = db.db.prepare('SELECT COUNT(*) as c FROM daily_stats WHERE date = ?').get(today);
+    var lastCrawl = db.db.prepare(
+      "SELECT * FROM crawl_log WHERE status='ok' ORDER BY crawled_at DESC LIMIT 1"
+    ).get();
+    var lastError = db.db.prepare(
+      "SELECT * FROM crawl_log WHERE status='error' ORDER BY crawled_at DESC LIMIT 1"
+    ).get();
+    res.json({
+      today: today,
+      hasData: hasData.c > 0,
+      recordCount: hasData.c,
+      lastOkCrawl: lastCrawl ? lastCrawl.crawled_at : null,
+      lastError: lastError ? { time: lastError.crawled_at, msg: lastError.error } : null
+    });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── API: Crawl status ──
 app.get('/api/crawl/status', function(req, res) {
   try {

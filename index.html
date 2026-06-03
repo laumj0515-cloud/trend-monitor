@@ -192,6 +192,7 @@ tr:hover td { background: rgba(255,255,255,0.015); }
   </aside>
 
   <main class="main">
+    <div id="healthBar" style="display:none;background:rgba(248,113,113,0.12);color:#fca5a5;border:1px solid rgba(248,113,113,0.2);border-radius:10px;padding:10px 16px;margin-bottom:16px;font-size:13px;cursor:pointer" onclick="this.style.display='none'" title="点击关闭"></div>
     <div class="header">
       <h1><span class="live-dot"></span><span id="pageTitle">趋势发现</span></h1>
       <div class="platform-tabs" id="platformTabs">
@@ -892,6 +893,24 @@ function downloadBlob(blob, filename) {
   a.click();
   URL.revokeObjectURL(a.href);
 }
+
+// ── Health check: warn if today's crawl failed ──
+function checkCrawlHealth() {
+  fetch(API + '/api/crawl/today-status')
+    .then(function(r) { return r.json(); })
+    .then(function(s) {
+      var bar = document.getElementById('healthBar');
+      if (!s.hasData) {
+        var errMsg = s.lastError ? '。最近错误: ' + s.lastError.msg.substring(0,80) + ' (' + s.lastError.time + ')' : '';
+        bar.innerHTML = '⚠ 今日尚未爬取数据' + errMsg + '。Windows 任务计划将在每天 9:13 自动执行。';
+        bar.style.display = 'block';
+      } else {
+        bar.style.display = 'none';
+      }
+    }).catch(function(){});
+}
+checkCrawlHealth();
+setInterval(checkCrawlHealth, 600000); // Check every 10 min
 
 // ── Live counter ──
 setInterval(function() { if (currentPanel === 'dashboard') loadStats(); }, 30000);

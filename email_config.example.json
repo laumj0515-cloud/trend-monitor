@@ -1,0 +1,5 @@
+{
+  "email": "your_qq_email@qq.com",
+  "authCode": "your_16_char_smtp_auth_code",
+  "to": "notification_receiver@qq.com"
+}
