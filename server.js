@@ -307,27 +307,7 @@ app.get('/api/topics/:id', function(req, res) {
   }
 })();
 
-// ── Scheduler: daily crawl + weekly discovery ──
-cron.schedule('13 9 * * *', async function() {
-  console.log('[Scheduler] Daily keyword crawl...');
-  try {
-    var keywords = db.getUserKeywords(true).map(function(k) { return k.keyword; });
-    if (keywords.length > 0) {
-      await crawler.crawlAll({ keywords: keywords, count: 8 });
-      console.log('[Scheduler] Daily crawl done');
-    }
-  } catch(e) { console.error('[Scheduler] Daily error:', e.message); }
-});
-
-cron.schedule('7 8 * * 0', async function() {
-  console.log('[Scheduler] Weekly trend discovery...');
-  try {
-    var result = await crawler.discoverTrendingTopics();
-    console.log('[Scheduler] Weekly discovery: ' + result.totalTopics + ' topics');
-  } catch(e) { console.error('[Scheduler] Weekly error:', e.message); }
-});
-
-console.log('Scheduler: daily 9:13 + weekly Sun 8:07');
+console.log('Scheduler: Windows Task Scheduler (daily 9:13 + weekly Sun 8:07)');
 
 // Start server
 app.listen(PORT, function() {

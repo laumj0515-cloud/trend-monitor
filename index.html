@@ -328,7 +328,7 @@ function switchPanel(panel, btn) {
   if (panel === 'dashboard') refreshDashboard();
   if (panel === 'topics') loadTopicList();
   if (panel === 'keywords') { loadKeywordManage(); loadKeywordAnalysis(); }
-  if (panel === 'history') loadFullHistory();
+  if (panel === 'history') { loadKeywordCache().then(function() { loadKeywordSelects(); loadFullHistory(); }); }
   if (panel === 'export') previewExport();
 }
 
@@ -514,9 +514,9 @@ function loadStats() {
 }
 
 function loadKeywordCache() {
-  fetch(API + '/api/keywords/manage')
+  return fetch(API + '/api/keywords/manage')
     .then(function(r) { return r.json(); })
-    .then(function(kws) { state.keywords = kws || []; })
+    .then(function(kws) { state.keywords = kws || []; return kws; })
     .catch(function(){});
 }
 
@@ -526,11 +526,16 @@ function loadKeywordSelects() {
     var sel = document.getElementById(id);
     if (!sel) return;
     var currentVal = sel.value;
-    sel.innerHTML = '<option value="">综合</option>';
+    sel.innerHTML = '';
     state.keywords.forEach(function(k) {
       sel.innerHTML += '<option value="' + k.keyword + '">' + k.keyword + '</option>';
     });
-    if (currentVal) sel.value = currentVal;
+    // Restore previous selection, or default to first keyword
+    if (currentVal && state.keywords.some(function(k) { return k.keyword === currentVal; })) {
+      sel.value = currentVal;
+    } else if (state.keywords.length > 0) {
+      sel.value = state.keywords[0].keyword;
+    }
   });
 }
 
@@ -771,42 +776,36 @@ function loadKwTrendChart() {
 
 // ── History Panel ──
 function loadFullHistory() {
-  // Ensure keywords are loaded first
-  fetch(API + '/api/keywords/manage')
+  var kw = document.getElementById('historyKwSelect').value || (state.keywords.length > 0 ? state.keywords[0].keyword : '');
+  if (!kw) { document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="4" style="color:#555;text-align:center;padding:40px">暂无追踪关键词，请先在首页搜索添加</td></tr>'; return; }
+
+  fetch(API + '/api/trends?keyword=' + encodeURIComponent(kw) + '&days=14&source=bilibili')
     .then(function(r) { return r.json(); })
-    .then(function(kws) {
-      state.keywords = kws || [];
-      loadKeywordSelects();
-      var kw = document.getElementById('historyKwSelect').value || (state.keywords.length > 0 ? state.keywords[0].keyword : '');
-      if (!kw) { document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="4" style="color:#555;text-align:center;padding:40px">暂无追踪关键词，请先在首页搜索添加</td></tr>'; return; }
-      return fetch(API + '/api/trends?keyword=' + encodeURIComponent(kw) + '&days=14&source=bilibili')
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-          if (!d || d.labels.length === 0) {
-            document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="4" style="color:#555;text-align:center;padding:40px">暂无数据，请等待自动爬取积累</td></tr>';
-            return;
-          }
-          var ctx = document.getElementById('fullHistoryChart').getContext('2d');
-          var gradient = ctx.createLinearGradient(0, 0, 0, 280);
-          gradient.addColorStop(0, 'rgba(124,140,248,0.3)');
-          gradient.addColorStop(1, 'rgba(124,140,248,0.02)');
-          if (fullHistoryChart) fullHistoryChart.destroy();
-          var allVals3 = d.searches.filter(function(v) { return v > 0; });
-          var yMax3 = allVals3.length > 0 ? Math.max.apply(null, allVals3) + 500000 : 1000000;
-          var yMin3 = allVals3.length > 0 ? Math.max(0, Math.min.apply(null, allVals3) - 300000) : 0;
-          fullHistoryChart = new Chart(ctx, {
-            type: 'line', data: { labels: d.labels, datasets: [
-              { label: 'B站总点赞', data: d.searches, borderColor: '#7C8CF8', backgroundColor: gradient, fill: true, tension: 0.4, pointRadius: 3, borderWidth: 2.5 },
-              { label: '视频数', data: d.posts, borderColor: '#f87171', tension: 0.4, pointRadius: 3, borderWidth: 2 }
-            ]},
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#8a8f9e', font: { size: 12 } } } }, scales: { x: { ticks: { color: '#555', maxTicksLimit: 20 } }, y: { min: yMin3, max: yMax3, ticks: { color: '#555' } }, grid: { color: 'rgba(255,255,255,0.04)' } } }
-          });
-          var html = '';
-          d.labels.forEach(function(label, i) {
-            html += '<tr><td>' + label + '</td><td>' + d.searches[i].toLocaleString() + '</td><td>' + d.posts[i] + '</td><td>' + Math.round((d.searches[i] + d.posts[i]) / 4).toLocaleString() + '</td></tr>';
-          });
-          document.getElementById('historyTableBody').innerHTML = html;
-        });
+    .then(function(d) {
+      if (!d || d.labels.length === 0) {
+        document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="4" style="color:#555;text-align:center;padding:40px">该关键词暂无B站互动数据。系统每天自动爬取，数据会持续积累。</td></tr>';
+        return;
+      }
+      var ctx = document.getElementById('fullHistoryChart').getContext('2d');
+      var gradient = ctx.createLinearGradient(0, 0, 0, 280);
+      gradient.addColorStop(0, 'rgba(124,140,248,0.3)');
+      gradient.addColorStop(1, 'rgba(124,140,248,0.02)');
+      if (fullHistoryChart) fullHistoryChart.destroy();
+      var allVals3 = d.searches.filter(function(v) { return v > 0; });
+      var yMax3 = allVals3.length > 0 ? Math.max.apply(null, allVals3) + 500000 : 1000000;
+      var yMin3 = allVals3.length > 0 ? Math.max(0, Math.min.apply(null, allVals3) - 300000) : 0;
+      fullHistoryChart = new Chart(ctx, {
+        type: 'line', data: { labels: d.labels, datasets: [
+          { label: 'B站总点赞', data: d.searches, borderColor: '#7C8CF8', backgroundColor: gradient, fill: true, tension: 0.4, pointRadius: 3, borderWidth: 2.5 },
+          { label: '视频数', data: d.posts, borderColor: '#f87171', tension: 0.4, pointRadius: 3, borderWidth: 2 }
+        ]},
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { labels: { color: '#8a8f9e', font: { size: 12 } } } }, scales: { x: { ticks: { color: '#555', maxTicksLimit: 20 } }, y: { min: yMin3, max: yMax3, ticks: { color: '#555' } }, grid: { color: 'rgba(255,255,255,0.04)' } } }
+      });
+      var html = '';
+      d.labels.forEach(function(label, i) {
+        html += '<tr><td>' + label + '</td><td>' + d.searches[i].toLocaleString() + '</td><td>' + d.posts[i] + '</td><td>' + Math.round((d.searches[i] + d.posts[i]) / 4).toLocaleString() + '</td></tr>';
+      });
+      document.getElementById('historyTableBody').innerHTML = html;
     }).catch(function(){});
 }
 
