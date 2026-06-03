@@ -167,7 +167,10 @@ function getKeywordTrend(keyword, days, source) {
   var d = days || 30;
   var s = source || '';
   var sql = 'SELECT date, keyword, SUM(search_count) as total_searches, SUM(post_count) as total_posts FROM daily_stats WHERE keyword LIKE ? AND date >= date(\'now\', \'-\' || ? || \' days\')';
-  if (s) {
+  if (s === 'bilibili') {
+    // Include both real and modeled bilibili data
+    sql += ' AND source IN (\'bilibili\', \'bilibili_modeled\')';
+  } else if (s) {
     sql += ' AND source = \'' + s.replace(/'/g, '\'\'') + '\'';
   }
   sql += ' GROUP BY date, keyword ORDER BY date ASC';
